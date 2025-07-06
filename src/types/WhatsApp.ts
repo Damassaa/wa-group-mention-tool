@@ -14,6 +14,7 @@ export interface MessageData {
 export interface ConnectionStatus {
   connected: boolean;
   lastUpdate: Date;
+  state: 'connecting' | 'qr-waiting' | 'qr-scanned' | 'connected';
 }
 
 export interface ApiResponse<T> {

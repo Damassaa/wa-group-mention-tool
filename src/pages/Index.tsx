@@ -6,6 +6,9 @@ import StatusBadge from '@/components/StatusBadge';
 import GroupsList from '@/components/GroupsList';
 import MessageComposer from '@/components/MessageComposer';
 import StatusMessage from '@/components/StatusMessage';
+import ConnectingScreen from '@/components/ConnectingScreen';
+import QRCodeScreen from '@/components/QRCodeScreen';
+import DebugControls from '@/components/DebugControls';
 import { Group, MessageData, ConnectionStatus } from '@/types/WhatsApp';
 
 const Index = () => {
@@ -13,7 +16,8 @@ const Index = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     connected: false,
-    lastUpdate: new Date()
+    lastUpdate: new Date(),
+    state: 'connecting'
   });
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -22,25 +26,56 @@ const Index = () => {
     message: string;
   }>({ type: null, message: '' });
 
-  // Simular dados para demonstração
+  // Simular fluxo de conexão automático
   useEffect(() => {
-    const loadDemoData = () => {
+    const simulateConnectionFlow = () => {
+      // Inicia conectando
       setTimeout(() => {
-        const demoGroups: Group[] = [
-          { id: '1', name: 'Família Silva', participantCount: 8 },
-          { id: '2', name: 'Trabalho - Equipe Marketing', participantCount: 15 },
-          { id: '3', name: 'Amigos da Faculdade', participantCount: 23 },
-          { id: '4', name: 'Condomínio Edifício Central', participantCount: 45 },
-          { id: '5', name: 'Grupo dos Vizinhos', participantCount: 12 }
-        ];
-        setGroups(demoGroups);
-        setConnectionStatus({ connected: true, lastUpdate: new Date() });
-        setLoading(false);
-      }, 1500);
+        setConnectionStatus(prev => ({ ...prev, state: 'qr-waiting' }));
+      }, 2000);
+
+      // Simula escaneamento do QR
+      setTimeout(() => {
+        setConnectionStatus(prev => ({ ...prev, state: 'qr-scanned' }));
+      }, 8000);
+
+      // Conecta completamente
+      setTimeout(() => {
+        setConnectionStatus(prev => ({ 
+          ...prev, 
+          state: 'connected', 
+          connected: true 
+        }));
+        loadDemoData();
+      }, 12000);
     };
 
-    loadDemoData();
+    simulateConnectionFlow();
   }, []);
+
+  const loadDemoData = () => {
+    const demoGroups: Group[] = [
+      { id: '1', name: 'Família Silva', participantCount: 8 },
+      { id: '2', name: 'Trabalho - Equipe Marketing', participantCount: 15 },
+      { id: '3', name: 'Amigos da Faculdade', participantCount: 23 },
+      { id: '4', name: 'Condomínio Edifício Central', participantCount: 45 },
+      { id: '5', name: 'Grupo dos Vizinhos', participantCount: 12 }
+    ];
+    setGroups(demoGroups);
+    setLoading(false);
+  };
+
+  const handleStateChange = (newState: 'connecting' | 'qr-waiting' | 'qr-scanned' | 'connected') => {
+    setConnectionStatus(prev => ({
+      ...prev,
+      state: newState,
+      connected: newState === 'connected'
+    }));
+
+    if (newState === 'connected' && groups.length === 0) {
+      loadDemoData();
+    }
+  };
 
   const handleGroupSelect = (group: Group) => {
     setSelectedGroup(group);
@@ -75,6 +110,50 @@ const Index = () => {
     }
   };
 
+  const renderMainInterface = () => (
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-12rem)]">
+        {/* Groups Panel */}
+        <div className="lg:col-span-1">
+          <GroupsList
+            groups={groups}
+            selectedGroupId={selectedGroup?.id || null}
+            onGroupSelect={handleGroupSelect}
+            loading={loading}
+          />
+        </div>
+
+        {/* Message Composer Panel */}
+        <div className="lg:col-span-1 flex flex-col gap-4">
+          <MessageComposer
+            selectedGroup={selectedGroup}
+            onSendMessage={handleSendMessage}
+            sending={sending}
+          />
+          
+          {/* Status Message */}
+          <StatusMessage
+            type={statusMessage.type}
+            message={statusMessage.message}
+          />
+        </div>
+      </div>
+    </main>
+  );
+
+  const renderConnectionScreen = () => {
+    switch (connectionStatus.state) {
+      case 'connecting':
+        return <ConnectingScreen />;
+      case 'qr-waiting':
+        return <QRCodeScreen />;
+      case 'qr-scanned':
+        return <QRCodeScreen isScanned={true} />;
+      default:
+        return renderMainInterface();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -89,40 +168,19 @@ const Index = () => {
                 Ferramenta de Menção WhatsApp
               </h1>
             </div>
-            <StatusBadge connected={connectionStatus.connected} />
+            <StatusBadge connectionState={connectionStatus.state} />
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-12rem)]">
-          {/* Groups Panel */}
-          <div className="lg:col-span-1">
-            <GroupsList
-              groups={groups}
-              selectedGroupId={selectedGroup?.id || null}
-              onGroupSelect={handleGroupSelect}
-              loading={loading}
-            />
-          </div>
+      {renderConnectionScreen()}
 
-          {/* Message Composer Panel */}
-          <div className="lg:col-span-1 flex flex-col gap-4">
-            <MessageComposer
-              selectedGroup={selectedGroup}
-              onSendMessage={handleSendMessage}
-              sending={sending}
-            />
-            
-            {/* Status Message */}
-            <StatusMessage
-              type={statusMessage.type}
-              message={statusMessage.message}
-            />
-          </div>
-        </div>
-      </main>
+      {/* Debug Controls */}
+      <DebugControls
+        connectionState={connectionStatus.state}
+        onStateChange={handleStateChange}
+      />
     </div>
   );
 };
